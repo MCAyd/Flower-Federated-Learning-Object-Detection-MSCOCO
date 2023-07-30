@@ -1,0 +1,18 @@
+[build-system]
+requires = ["poetry-core>=1.4.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "test-env"
+version = "0.1.0"
+description = "Object Detection Federated Learning Project"
+authors = [
+    "Mehmet Can Aydin <ma04274@surrey.ac.uk>"
+]
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.11"
+flwr = ">=1.0,<2.0"
+torch = "1.13.1"
+torchvision = "0.14.1"
+validators = "0.18.2"
