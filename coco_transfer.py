@@ -50,19 +50,20 @@ class CocoDetection(torch.utils.data.Dataset):
             	boxes.append([xmin, ymin, xmax, ymax])
             	area = coco_annotation[i]['bbox'][2] * coco_annotation[i]['bbox'][3]
             	areas.append(area)
+            	#areas.append(coco_annotation[i]['area'])
             	labels.append(coco_annotation[i]['category_id'])
             	iscrowd.append(coco_annotation[i]['iscrowd'])
 
         # Tensorise img_id
-        img_id = torch.tensor([img_id])
+        img_id = torch.tensor([img_id], dtype=torch.int64)
         # Size of bbox (Rectangular)
-        boxes = torch.as_tensor(boxes, dtype=torch.float32)
+        boxes = torch.as_tensor(boxes, dtype=torch.float)
 	# tensorise areas
-        areas = torch.as_tensor(areas, dtype=torch.float32)
+        areas = torch.as_tensor(areas)
         # labels to tensor
         labels = torch.as_tensor(labels, dtype=torch.int64)
         # iscrowd
-        iscrowd = torch.as_tensor(iscrowd, dtype=torch.int64)
+        iscrowd = torch.as_tensor(iscrowd, dtype=torch.uint8)
         
         # Annotation is in dictionary format
         my_annotation = {}
@@ -74,6 +75,9 @@ class CocoDetection(torch.utils.data.Dataset):
 
         if self.transforms is not None:
             img = self.transforms(img)
+            
+        #if my_annotation["image_id"] == 29187: # See if the format is correct
+        	#print(my_annotation)
 
         return img_id, img, my_annotation
 

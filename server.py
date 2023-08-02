@@ -28,7 +28,7 @@ def evaluate_config(server_round: int):
 	"""Return evaluation configuration dict for each round.
 	Perform how many batches will be utilized on local evaluation steps on each client (i.e., use five
 	batches)."""
-	val_steps = 100
+	val_steps = 313 # For main model len(validset)/batch_size
 	return {"val_steps": val_steps}
 
 def get_evaluate_fn(model: torch.nn.Module):
@@ -83,7 +83,6 @@ def main():
 
 	args = parser.parse_args()
 
-	#model = utils.load_net()
 	model = utils.load_net(args.model)
 
 	model_parameters = [val.cpu().numpy() for _, val in model.state_dict().items()]

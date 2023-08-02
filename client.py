@@ -6,6 +6,7 @@ import flwr as fl
 import argparse
 from collections import OrderedDict
 import warnings
+import numpy
 
 warnings.filterwarnings("ignore")
 
@@ -56,6 +57,10 @@ class CocoClient(fl.client.NumPyClient):
 		# Update local model parameters
 		self.set_parameters(parameters)
 		
+		if len(config) > 1: # the case where dry run is operated.
+			self.batch_size = config["batch_size"]
+			self.num_workers = config["num_workers"]
+		
 		valLoader = DataLoader(self.validset, batch_size=self.batch_size, collate_fn=utils.collate_fn, num_workers=self.num_workers)
 
 		# Get config values
@@ -65,19 +70,28 @@ class CocoClient(fl.client.NumPyClient):
 		
 		return 0.0, len(self.validset), {"metrics" : metrics}
 	
-def client_dry_run(model, device: str = "cpu"):
-	"""Weak tests to check whether all client methods are working as
-	expected."""
+def client_dry_run(model, pretrained, device: str = "cpu"):
+	"""Tests to check whether all client methods are working as
+	expected AND evaluate pretrained model as for one client."""
 	trainset, validset = utils.load_partition(0, 1)
-	trainset = torch.utils.data.Subset(trainset, range(10))
-	validset = torch.utils.data.Subset(validset, range(10))
+	#trainset = torch.utils.data.Subset(trainset, range(10)) # dry_toy_run
+	#validset = torch.utils.data.Subset(validset, range(10))
 	client = CocoClient(model, trainset, validset, device)
-	parameters_trained, _, _=client.fit(
-	utils.get_model_params(model),
-	{"batch_size": 16, "local_epochs": 5, "learning_rate": 0.001, "num_workers": 2},
-	)
+	
+	config = {"batch_size": 16,
+		"local_epochs": 5,
+		"learning_rate": 0.001,
+		"num_workers": 2}
+		
+	if pretrained != True:
+		parameters_trained, _, _=client.fit(
+		utils.get_model_params(model),
+		{"batch_size":config["batch_size"], "local_epochs":config["local_epochs"], "learning_rate":config["learning_rate"], "num_workers":config["num_workers"]},
+		)
 
-	client.evaluate(parameters_trained, {"val_steps": 16})
+		client.evaluate(parameters_trained, {"val_steps":numpy.ceil(len(validset)/config["batch_size"])})
+	else:
+		client.evaluate(utils.get_model_params(model), {"val_steps":numpy.ceil(len(validset)/config["batch_size"]), "batch_size":config["batch_size"], "num_workers":config["num_workers"]})
 
 	print("Dry Run Successful")
 
@@ -116,6 +130,13 @@ def main() -> None:
 	help="Set to true to use GPU. Default: True",
 	)
 	parser.add_argument(
+	"--pretrained",
+	type=bool,
+	default=False,
+	required=False,
+	help="Set to true to use pretrained model. Default: False, Only available in dry_run setting",
+	)
+	parser.add_argument(
 	"--model",
 	type=str,
 	default='fasterrcnn',
@@ -130,17 +151,15 @@ def main() -> None:
 	"cuda:0" if torch.cuda.is_available() and args.use_cuda else "cpu"
 	)
 	
-	#model = utils.load_net()
-	model = utils.load_net(args.model)
+	model = utils.load_net(args.model, args.pretrained)
 	
 	if args.dry:
-        	client_dry_run(model, device)
+        	client_dry_run(model, args.pretrained, device)
         
 	else:
 		trainset,validset = utils.load_partition(args.partition, args.clientnumber)
 
 		client = CocoClient(model, trainset, validset, device)
-		#client = CocoClient(trainset, validset, device, args.model)
 
 		fl.client.start_numpy_client(server_address="127.0.0.1:8080", client=client)
 
