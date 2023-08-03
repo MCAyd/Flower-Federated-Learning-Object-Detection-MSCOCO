@@ -81,7 +81,7 @@ def client_dry_run(model, pretrained, device: str = "cpu"):
 	config = {"batch_size": 16,
 		"local_epochs": 5,
 		"learning_rate": 0.001,
-		"num_workers": 2}
+		"num_workers": 1}
 		
 	if pretrained != True:
 		parameters_trained, _, _=client.fit(
@@ -148,7 +148,7 @@ def main() -> None:
 	args = parser.parse_args()
 
 	device = torch.device(
-	"cuda:0" if torch.cuda.is_available() and args.use_cuda else "cpu"
+	"cuda:"+str(args.partition) if torch.cuda.is_available() and args.use_cuda else "cpu"
 	)
 	
 	model = utils.load_net(args.model, args.pretrained)
@@ -161,7 +161,7 @@ def main() -> None:
 
 		client = CocoClient(model, trainset, validset, device)
 
-		fl.client.start_numpy_client(server_address="127.0.0.1:8080", client=client)
+		fl.client.start_numpy_client(server_address="localhost:8080", client=client)
 
 
 if __name__ == "__main__":

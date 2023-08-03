@@ -1,3 +1,6 @@
+cd /scratch
+mkdir dataset
+cd dataset
 mkdir coco
 cd coco
 mkdir images

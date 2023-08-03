@@ -2,12 +2,12 @@
 set -e
 cd "$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"/
 
-python3 server.py --clientnumber 2 --model ssd & 
-sleep 5s  # Sleep for 5s to give the server enough time to start
+python3 server.py --clientnumber 3 --model fcos & 
+sleep 10s  # Sleep for 10s to give the server enough time to start
 
-for i in `seq 0 1`; do # Pick how many clients will be run, same client count for --clientnumber
+for i in `seq 0 2`; do # Pick how many clients will be run, same client count for --clientnumber
     echo "Starting client $i"
-    python3 client.py --partition=${i} --clientnumber 2 --model ssd &
+    python3 client.py --partition=${i} --clientnumber 3 --model fcos &
 done
 
 # Enable CTRL+C to stop all background processes

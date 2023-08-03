@@ -17,10 +17,10 @@ warnings.filterwarnings("ignore")
 def fit_config(server_round: int):
 	"""Return training configuration dict for each round."""
 	config = {
-	"batch_size": 16,
+	"batch_size": 12,
 	"local_epochs": 5,
-	"learning_rate": 0.001,
-	"num_workers": 2
+	"learning_rate": 0.002,
+	"num_workers": 1
 	}
 	return config
 
@@ -36,7 +36,7 @@ def get_evaluate_fn(model: torch.nn.Module):
 
 	# Load data and model here to avoid the overhead of doing it in `evaluate` itself
 	_, valset, _ = utils.load_data()
-	valLoader = DataLoader(valset, batch_size=16, collate_fn=utils.collate_fn, num_workers=2)
+	valLoader = DataLoader(valset, batch_size=16, collate_fn=utils.collate_fn, num_workers=1)
 
 	# The `evaluate` function will be called after every round
 	def evaluate(
@@ -49,7 +49,7 @@ def get_evaluate_fn(model: torch.nn.Module):
 		state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
 		model.load_state_dict(state_dict, strict=True)
 		
-		device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+		device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 
 		__, metrics = utils.test(model, valLoader, _, device)
 
@@ -91,9 +91,9 @@ def main():
 	strategy = fl.server.strategy.FedAvg(
 		fraction_fit=1.0, #sample all of available clients for training
 		fraction_evaluate=1.0, #sample all of available clients for evaluation
-		min_fit_clients=args.clientnumber, #Never sample less than 2 clients for training
-		min_evaluate_clients=args.clientnumber, #Never sample less than 2 clients for evaluation
-		min_available_clients=args.clientnumber, #Wait until all 2 clients are available
+		min_fit_clients=args.clientnumber, #Never sample less than number of clients for training
+		min_evaluate_clients=args.clientnumber, #Never sample less than number of clients for evaluation
+		min_available_clients=args.clientnumber, #Wait until all number of clients are available
 		evaluate_fn=get_evaluate_fn(model),
 		on_fit_config_fn=fit_config,
 		on_evaluate_config_fn=evaluate_config,
@@ -102,8 +102,8 @@ def main():
 
 	# Start Flower server for ### rounds of federated learning
 	fl.server.start_server(
-	server_address="0.0.0.0:8080",
-	config=fl.server.ServerConfig(num_rounds=4),
+	server_address="localhost:8080",
+	config=fl.server.ServerConfig(num_rounds=3),
 	strategy=strategy
 	)
 

@@ -1,9 +1,5 @@
 import torch
 import torchvision.transforms as transforms
-#from torchvision.datasets import CocoDetection
-#from coco_load import CocoDetection
-#from coco_import import CocoDetection
-#from detection.engine import evaluate
 from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2 as fasterrcnn, FasterRCNN_ResNet50_FPN_V2_Weights as fasterrcnn_weights
 from torchvision.models.detection import fcos_resnet50_fpn as fcos, FCOS_ResNet50_FPN_Weights as fcos_weights
 from torchvision.models.detection import retinanet_resnet50_fpn_v2 as retinanet, RetinaNet_ResNet50_FPN_V2_Weights as retinanet_weights
@@ -42,8 +38,8 @@ def load_data():
 	trainset = CocoDetection(root=train_data_dir, annotation=train_ann_file, transforms=transform)
 	validset = CocoDetection(root=val_data_dir, annotation=val_ann_file, transforms=transform)
 	
-	#trainset = torch.utils.data.Subset(trainset, range(5000)) # TOY_MODEL
-	#validset = torch.utils.data.Subset(validset, range(1000))
+	#trainset = torch.utils.data.Subset(trainset, range(1000)) # TOY_MODEL
+	#validset = torch.utils.data.Subset(validset, range(100))
 
 	num_examples = {"trainset": len(trainset), "validset": len(validset)}
 
@@ -107,25 +103,18 @@ def collate_fn(batch):
 def train(net, trainloader, valloader, epochs, lrate, device: str = "cpu"):
 	"""Train the network on the training set."""
 	print("Starting training in device, " + str(device) + '...')
+	
 	net.to(device)  # move model to GPU if available
 	optimizer = torch.optim.SGD(
-	net.parameters(), lr=lrate, momentum=0.9, weight_decay=1e-4
-	)
-	net.train()
+	net.parameters(), lr=lrate, momentum=0.9, weight_decay=1e-4)
+	scaler = torch.cuda.amp.GradScaler()
+	lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2], gamma=0.1)
+
 	train_results = []  # initialize a list to store training results for each epoch
 	for epoch in range(epochs):
-		ovr_loss = 0.0
-		batch_ = 0
-		for i, (_,images, targets) in enumerate(trainloader):
-			images = list(image.to(device) for image in images)
-			targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-			optimizer.zero_grad()
-			loss_dict = net(images, targets)
-			losses = sum(loss for loss in loss_dict.values())
-			ovr_loss += losses
-			batch_ += 1
-			losses.backward()
-			optimizer.step()
+	
+		ovr_loss, batch_ = train_one_epoch(net, optimizer, trainloader, device, epoch, scaler)
+		lr_scheduler.step()
 			
 		# calculate average loss and perplexity for this epoch
 		avg_loss = ovr_loss / batch_
@@ -228,4 +217,41 @@ def coco_convert(img_ids,preds):
 			batch_results.append(result)
 			
 	return batch_results
+	
+def train_one_epoch(model, optimizer, trainloader, device, epoch, scaler=None):
+    model.train()
+    ovr_loss = 0
+    batch_ = 0
+    lr_scheduler = None
+    
+    if epoch == 0:
+        warmup_factor = 1.0 / 1000
+        warmup_iters = min(1000, len(trainloader) - 1)
+
+        lr_scheduler = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=warmup_factor, total_iters=warmup_iters
+        )
+
+    for _, images, targets in trainloader:
+        images = list(image.to(device) for image in images)
+        targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
+        with torch.cuda.amp.autocast(enabled=scaler is not None):
+            loss_dict = model(images, targets)
+            losses = sum(loss for loss in loss_dict.values())
+            ovr_loss += losses
+            batch_+=1
+
+        optimizer.zero_grad()
+        if scaler is not None:
+            scaler.scale(losses).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            losses.backward()
+            optimizer.step()
+
+        if lr_scheduler is not None:
+            lr_scheduler.step()
+
+    return ovr_loss, batch_
 			
