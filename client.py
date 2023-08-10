@@ -2,14 +2,18 @@ import utils
 from torch.utils.data import DataLoader
 import torchvision.datasets
 import torch
+import numpy
 import flwr as fl
 import argparse
 from collections import OrderedDict
-import warnings
-import numpy
+import random
 
+import warnings
 warnings.filterwarnings("ignore")
 
+torch.manual_seed(4)
+random.seed(4)
+numpy.random.seed(4)
 
 class CocoClient(fl.client.NumPyClient):
 	def __init__(
@@ -108,7 +112,7 @@ def main() -> None:
 	"--clientnumber",
 	type=int,
 	default=2,
-	choices=range(1, 7),
+	choices=range(1, 4),
 	required=False	,
 	help="Specifies the client number to be used. \
 	Picks 2 client by default",
@@ -117,7 +121,7 @@ def main() -> None:
 	"--partition",
 	type=int,
 	default=1,
-	choices=range(0, 6),
+	choices=range(0, 3),
 	required=False,
 	help="Specifies the artificial data partition of MSCOCO to be used. \
 	Picks partition 1 by default",

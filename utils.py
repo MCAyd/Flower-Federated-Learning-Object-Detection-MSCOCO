@@ -9,6 +9,7 @@ from coco_transfer import CocoDetection
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 import numpy
+import random
 
 import os
 import os.path
@@ -16,8 +17,11 @@ import json
 import uuid
 
 import warnings
-
 warnings.filterwarnings("ignore")
+
+torch.manual_seed(4)
+random.seed(4)
+numpy.random.seed(4)
 
 train_data_dir = '/scratch/dataset/coco/images/train2017'
 train_ann_file = '/scratch/dataset/coco/annotations/instances_train2017.json'
@@ -31,14 +35,13 @@ def load_data():
 	transform = transforms.Compose(
 			[
 				transforms.ToTensor(),
-				#transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 			]
 		)
 
 	trainset = CocoDetection(root=train_data_dir, annotation=train_ann_file, transforms=transform)
 	validset = CocoDetection(root=val_data_dir, annotation=val_ann_file, transforms=transform)
 	
-	#trainset = torch.utils.data.Subset(trainset, range(1000)) # TOY_MODEL
+	#trainset = torch.utils.data.Subset(trainset, range(1200)) # TOY_MODEL
 	#validset = torch.utils.data.Subset(validset, range(100))
 
 	num_examples = {"trainset": len(trainset), "validset": len(validset)}
@@ -47,7 +50,7 @@ def load_data():
 
 def load_partition(idx: int, cnumber: int):
 	"""Load 1/client_number th of the training and test data to simulate a partition."""
-	assert idx in range(6)
+	assert idx in range(3)
 	trainset, validset, num_examples = load_data()
 	n_train = int(num_examples["trainset"] / cnumber)
 	n_valid = int(num_examples["validset"] / cnumber)
@@ -108,13 +111,13 @@ def train(net, trainloader, valloader, epochs, lrate, device: str = "cpu"):
 	optimizer = torch.optim.SGD(
 	net.parameters(), lr=lrate, momentum=0.9, weight_decay=1e-4)
 	scaler = torch.cuda.amp.GradScaler()
-	lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2], gamma=0.1)
+	#lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5], gamma=0.1)
 
 	train_results = []  # initialize a list to store training results for each epoch
 	for epoch in range(epochs):
 	
 		ovr_loss, batch_ = train_one_epoch(net, optimizer, trainloader, device, epoch, scaler)
-		lr_scheduler.step()
+		#lr_scheduler.step()
 			
 		# calculate average loss and perplexity for this epoch
 		avg_loss = ovr_loss / batch_

@@ -4,23 +4,24 @@ import argparse
 from torch.utils.data import DataLoader
 import utils
 import numpy
-
 import flwr as fl
 import torch
-
-import utils
+import random
 
 import warnings
-
 warnings.filterwarnings("ignore")
+
+torch.manual_seed(4)
+random.seed(4)
+numpy.random.seed(4)
 
 def fit_config(server_round: int):
 	"""Return training configuration dict for each round."""
 	config = {
-	"batch_size": 12,
-	"local_epochs": 5,
-	"learning_rate": 0.002,
-	"num_workers": 1
+	"batch_size": 4,
+	"num_workers": 0,
+	"local_epochs": 6,
+	"learning_rate": 0.005
 	}
 	return config
 
@@ -36,7 +37,7 @@ def get_evaluate_fn(model: torch.nn.Module):
 
 	# Load data and model here to avoid the overhead of doing it in `evaluate` itself
 	_, valset, _ = utils.load_data()
-	valLoader = DataLoader(valset, batch_size=16, collate_fn=utils.collate_fn, num_workers=1)
+	valLoader = DataLoader(valset, batch_size=16, collate_fn=utils.collate_fn, num_workers=0)
 
 	# The `evaluate` function will be called after every round
 	def evaluate(
@@ -67,7 +68,7 @@ def main():
 	"--clientnumber",
 	type=int,
 	default=2,
-	choices=range(1, 7),
+	choices=range(1, 4),
 	required=False	,
 	help="Specifies the client number to be used. \
 	Picks 2 client by default",
@@ -103,7 +104,7 @@ def main():
 	# Start Flower server for ### rounds of federated learning
 	fl.server.start_server(
 	server_address="localhost:8080",
-	config=fl.server.ServerConfig(num_rounds=3),
+	config=fl.server.ServerConfig(num_rounds=5),
 	strategy=strategy
 	)
 
