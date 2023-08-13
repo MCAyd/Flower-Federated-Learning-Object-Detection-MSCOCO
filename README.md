@@ -2,7 +2,7 @@
 This project demonstrates an advanced federated learning setup using Flower with PyTorch for object detection model. The project has key aspects in the following ways:
 
 - You can choose the client number and the object detection model you would like to train/run from run.sh doc. 
-- Each client holds a partition of MS COCO dataset of 50000 training examples and 5000 validation examples (note that using the `run.sh` script will select 2 clients with 2 partition of the dataset and object detection model ssd).
+- Each client holds a partition of MS COCO dataset of 118k training examples and 5k validation examples (note that using the `run.sh` script will select 2 clients with 2 partition of the dataset and object detection model ssd).
 - Server-side model evaluation after parameter aggregation
 - Hyperparameter schedule using config functions
 - Custom return values
