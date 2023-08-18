@@ -21,9 +21,12 @@ class CocoClient(fl.client.NumPyClient):
 		model,
 		trainset: torchvision.datasets,
 		validset: torchvision.datasets,
-		device: str):
+		device: str,
+		client_no: str):
+		
 		self.model = model
 		self.device = device
+		self.client_no = client_no
 		self.trainset = trainset
 		self.validset = validset
 		
@@ -43,13 +46,16 @@ class CocoClient(fl.client.NumPyClient):
 		self.epochs: int = config["local_epochs"]
 		self.lrate: float = config['learning_rate']
 		self.num_workers: int = config['num_workers']
+		self.momentum: float = config['momentum']
+		self.weight_decay: float = config['weight_decay']
+		self.server_round: int = config['server_round']
 
 		# Update local model parameters
 		self.set_parameters(parameters)
 
 		trainLoader = DataLoader(self.trainset, batch_size=self.batch_size, shuffle=True, collate_fn=utils.collate_fn, num_workers=self.num_workers)
 
-		results = utils.train(self.model, trainLoader, None, self.epochs, self.lrate, self.device)
+		results = utils.train(self.model, trainLoader, None, self.epochs, self.lrate, self.momentum, self.weight_decay, self.server_round, self.client_no, self.device)
 
 		parameters_prime = utils.get_model_params(self.model)
 		num_examples_train = len(self.trainset)
@@ -80,18 +86,19 @@ def client_dry_run(model, pretrained, device: str = "cpu"):
 	trainset, validset = utils.load_partition(0, 1)
 	#trainset = torch.utils.data.Subset(trainset, range(10)) # dry_toy_run
 	#validset = torch.utils.data.Subset(validset, range(10))
-	client = CocoClient(model, trainset, validset, device)
+	client = CocoClient(model, trainset, validset, device, str(0))
 	
 	config = {"batch_size": 16,
-		"local_epochs": 5,
-		"learning_rate": 0.001,
-		"num_workers": 1}
+		"local_epochs": 6,
+		"learning_rate": 0.005,
+		"num_workers": 1,
+		"momentum": 0.9,
+		"weight_decay": 1e-4,
+		"server_round": 0}
 		
 	if pretrained != True:
 		parameters_trained, _, _=client.fit(
-		utils.get_model_params(model),
-		{"batch_size":config["batch_size"], "local_epochs":config["local_epochs"], "learning_rate":config["learning_rate"], "num_workers":config["num_workers"]},
-		)
+		utils.get_model_params(model), config)
 
 		client.evaluate(parameters_trained, {"val_steps":numpy.ceil(len(validset)/config["batch_size"])})
 	else:
@@ -111,20 +118,20 @@ def main() -> None:
 	parser.add_argument(
 	"--clientnumber",
 	type=int,
-	default=2,
+	default=1,
 	choices=range(1, 4),
 	required=False	,
 	help="Specifies the client number to be used. \
-	Picks 2 client by default",
+	Picks 1 client by default",
 	)
 	parser.add_argument(
 	"--partition",
 	type=int,
-	default=1,
+	default=0,
 	choices=range(0, 3),
 	required=False,
 	help="Specifies the artificial data partition of MSCOCO to be used. \
-	Picks partition 1 by default",
+	Picks partition 0 by default",
 	)
 	parser.add_argument(
 	"--use_cuda",
@@ -139,6 +146,13 @@ def main() -> None:
 	default=False,
 	required=False,
 	help="Set to true to use pretrained model. Default: False, Only available in dry_run setting",
+	)
+	parser.add_argument(
+	"--iid",
+	type=bool,
+	default=True,
+	required=False,
+	help="Set to true iid partition. Default: True",
 	)
 	parser.add_argument(
 	"--model",
@@ -161,9 +175,9 @@ def main() -> None:
         	client_dry_run(model, args.pretrained, device)
         
 	else:
-		trainset,validset = utils.load_partition(args.partition, args.clientnumber)
+		trainset,validset = utils.load_partition(args.partition, args.clientnumber, args.iid)
 
-		client = CocoClient(model, trainset, validset, device)
+		client = CocoClient(model, trainset, validset, device, str(args.partition))
 
 		fl.client.start_numpy_client(server_address="localhost:8080", client=client)
 

@@ -21,7 +21,10 @@ def fit_config(server_round: int):
 	"batch_size": 4,
 	"num_workers": 0,
 	"local_epochs": 6,
-	"learning_rate": 0.005
+	"learning_rate": 0.005,
+	"momentum": 0.9,
+	"weight_decay": 1e-4,
+	"server_round": server_round
 	}
 	return config
 
