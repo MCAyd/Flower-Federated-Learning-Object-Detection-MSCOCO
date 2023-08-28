@@ -18,10 +18,10 @@ numpy.random.seed(4)
 def fit_config(server_round: int):
 	"""Return training configuration dict for each round."""
 	config = {
-	"batch_size": 4,
-	"num_workers": 0,
-	"local_epochs": 6,
-	"learning_rate": 0.005,
+	"batch_size": 8,
+	"local_epochs": 8,
+	"learning_rate": 0.02,
+	"num_workers":0,
 	"momentum": 0.9,
 	"weight_decay": 1e-4,
 	"server_round": server_round
@@ -40,7 +40,7 @@ def get_evaluate_fn(model: torch.nn.Module):
 
 	# Load data and model here to avoid the overhead of doing it in `evaluate` itself
 	_, valset, _ = utils.load_data()
-	valLoader = DataLoader(valset, batch_size=16, collate_fn=utils.collate_fn, num_workers=0)
+	valLoader = DataLoader(valset, batch_size=64, collate_fn=utils.collate_fn, num_workers=0)
 
 	# The `evaluate` function will be called after every round
 	def evaluate(
@@ -53,11 +53,14 @@ def get_evaluate_fn(model: torch.nn.Module):
 		state_dict = OrderedDict({k: torch.tensor(v) for k, v in params_dict})
 		model.load_state_dict(state_dict, strict=True)
 		
-		device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+		#device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 
-		__, metrics = utils.test(model, valLoader, _, device)
-
-		return __, {"metrics" : metrics}
+		#__, metrics = utils.test(model, valLoader, _, device)
+		if server_round >= 1:
+			loss, metrics = utils.test(model, valLoader, _)
+			return loss, {"metrics": metrics}
+		else:
+			return None, {"metrics" : "Initial evaluation round, jumping to first round training"}
 
 	return evaluate
 
@@ -70,11 +73,11 @@ def main():
 	parser.add_argument(
 	"--clientnumber",
 	type=int,
-	default=2,
-	choices=range(1, 4),
+	default=1,
+	choices=range(1, 5),
 	required=False	,
 	help="Specifies the client number to be used. \
-	Picks 2 client by default",
+	Picks 1 client by default",
 	)
 	parser.add_argument(
 	"--model",
@@ -107,7 +110,7 @@ def main():
 	# Start Flower server for ### rounds of federated learning
 	fl.server.start_server(
 	server_address="localhost:8080",
-	config=fl.server.ServerConfig(num_rounds=5),
+	config=fl.server.ServerConfig(num_rounds=4),
 	strategy=strategy
 	)
 

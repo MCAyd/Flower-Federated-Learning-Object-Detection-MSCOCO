@@ -80,18 +80,18 @@ class CocoClient(fl.client.NumPyClient):
 		
 		return 0.0, len(self.validset), {"metrics" : metrics}
 	
-def client_dry_run(model, pretrained, device: str = "cpu"):
+def client_dry_run(model, pretrained, noniid, device: str = "cpu"):
 	"""Tests to check whether all client methods are working as
 	expected AND evaluate pretrained model as for one client."""
-	trainset, validset = utils.load_partition(0, 1)
-	#trainset = torch.utils.data.Subset(trainset, range(10)) # dry_toy_run
-	#validset = torch.utils.data.Subset(validset, range(10))
+	trainset, validset = utils.load_partition(0, 1, noniid)
+	#trainset = torch.utils.data.Subset(trainset, range(1000)) # dry_toy_run
+	#validset = torch.utils.data.Subset(validset, range(100))
 	client = CocoClient(model, trainset, validset, device, str(0))
 	
 	config = {"batch_size": 16,
 		"local_epochs": 6,
 		"learning_rate": 0.005,
-		"num_workers": 1,
+		"num_workers": 0,
 		"momentum": 0.9,
 		"weight_decay": 1e-4,
 		"server_round": 0}
@@ -119,7 +119,7 @@ def main() -> None:
 	"--clientnumber",
 	type=int,
 	default=1,
-	choices=range(1, 4),
+	choices=range(1, 5),
 	required=False	,
 	help="Specifies the client number to be used. \
 	Picks 1 client by default",
@@ -128,7 +128,7 @@ def main() -> None:
 	"--partition",
 	type=int,
 	default=0,
-	choices=range(0, 3),
+	choices=range(0, 4),
 	required=False,
 	help="Specifies the artificial data partition of MSCOCO to be used. \
 	Picks partition 0 by default",
@@ -148,11 +148,11 @@ def main() -> None:
 	help="Set to true to use pretrained model. Default: False, Only available in dry_run setting",
 	)
 	parser.add_argument(
-	"--iid",
+	"--noniid",
 	type=bool,
-	default=True,
+	default=False,
 	required=False,
-	help="Set to true iid partition. Default: True",
+	help="Set to true for noniid partition. Default: False",
 	)
 	parser.add_argument(
 	"--model",
@@ -172,10 +172,10 @@ def main() -> None:
 	model = utils.load_net(args.model, args.pretrained)
 	
 	if args.dry:
-        	client_dry_run(model, args.pretrained, device)
+        	client_dry_run(model, args.pretrained, args.noniid, device)
         
 	else:
-		trainset,validset = utils.load_partition(args.partition, args.clientnumber, args.iid)
+		trainset,validset = utils.load_partition(args.partition, args.clientnumber, args.noniid)
 
 		client = CocoClient(model, trainset, validset, device, str(args.partition))
 

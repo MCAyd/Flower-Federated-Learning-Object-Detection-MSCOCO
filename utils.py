@@ -42,31 +42,36 @@ def load_data():
 	trainset = CocoDetection(root=train_data_dir, annotation=train_ann_file, transforms=transform)
 	validset = CocoDetection(root=val_data_dir, annotation=val_ann_file, transforms=transform)
 	
-	#trainset = torch.utils.data.Subset(trainset, range(1000)) # TOY_MODEL
-	#validset = torch.utils.data.Subset(validset, range(100))
-
+	#trainset = torch.utils.data.Subset(trainset, range(5000)) # TOY_MODEL
+	#validset = torch.utils.data.Subset(validset, range(1000))
+		
 	num_examples = {"trainset": len(trainset), "validset": len(validset)}
 
 	return trainset, validset, num_examples
 
-def load_partition(idx: int, cnumber: int, iid: bool = True):
+def load_partition(idx: int, cnumber: int, noniid: bool):
 	"""Load 1/client_number th of the training and test data to simulate a partition."""
-	assert idx in range(3)
+	assert idx in range(4)
 	trainset, validset, num_examples = load_data()
-	
-	if iid == False:
-		trainset = sorted(trainset, key=lambda x: len(x[2]["labels"]), reverse=True)
 		
 	n_train = int(num_examples["trainset"] / cnumber)
 	n_valid = int(num_examples["validset"] / cnumber)
+	train_partition = None
+	
+	if noniid:
+		print("Dataset will be distributed with Non-IID setting.")
+		indices = numpy.argsort([len(x[2]["labels"]) for x in trainset])[::-1]
+		selected_indices = indices[idx * n_train : (idx + 1) * n_train]
+		train_partition = torch.utils.data.Subset(trainset, selected_indices)
+	else:
+		train_partition = torch.utils.data.Subset(
+		trainset, range(idx * n_train, (idx + 1) * n_train)
+		)	
 
-	train_partition = torch.utils.data.Subset(
-	trainset, range(idx * n_train, (idx + 1) * n_train)
-	)
 	valid_partition = torch.utils.data.Subset(
 	validset, range(idx * n_valid, (idx + 1) * n_valid)
 	)
-
+		
 	return (train_partition,valid_partition)
 
 def load_net(entrypoint: str = 'none', pretrained: bool = False):
@@ -76,22 +81,22 @@ def load_net(entrypoint: str = 'none', pretrained: bool = False):
 		if pretrained:
 			model = fasterrcnn(weights=fasterrcnn_weights)
 		else:
-			model = fasterrcnn(weights_backbone=resnet50_weights) #weights_backbone set None as default, manually imported
+			model = fasterrcnn(weights_backbone=resnet50_weights, trainable_backbone_layers=2) #weights_backbone imported
 	elif entrypoint == "fcos":
 		if pretrained:
 			model = fcos(weights=fcos_weights)
 		else:
-			model = fcos()
+			model = fcos(trainable_backbone_layers=2)
 	elif entrypoint == "retinanet":
 		if pretrained:
 			model = retinanet(weights=retinanet_weights)
 		else:
-			model = retinanet(weights_backbone=resnet50_weights) #weights_backbone set None as default, manually imported
+			model = retinanet(weights_backbone=resnet50_weights, trainable_backbone_layers=2) #weights_backbone imported
 	elif entrypoint == "ssd":
 		if pretrained:
 			model = ssd(weights=ssd_weights)
 		else:
-			model = ssd()
+			model = ssd(trainable_backbone_layers=3)
 	else:
 		if pretrained:
 			model = ssdlite(weights=ssdlite_weights)
@@ -110,19 +115,22 @@ def collate_fn(batch):
 
 def train(net, trainloader, valloader, epochs, lrate, momentum, weight_decay, server_round, client_no, device: str = "cpu"):
 	"""Train the network on the training set."""
-	print("Starting training in device, " + str(device) + '...')
+	print("Starting training in device, " + str(device) + ' with LR ' + str(lrate) + '...')
 	
 	net.to(device)  # move model to GPU if available
 	optimizer = torch.optim.SGD(
 	net.parameters(), lr=lrate, momentum=momentum, weight_decay=weight_decay)
 	scaler = torch.cuda.amp.GradScaler()
 	lr_scheduler = None
-	if server_round == 5:
-		lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[4], gamma=0.1)
+	if server_round == 3:
+		print("MultiStepLR is activated for round 3.")
+		lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[3], gamma=0.1)
+	elif server_round == 4:
+		print("MultiStepLR is activated for round 4.")
+		lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[0], gamma=0.1)
 
 	train_results = []  # initialize a list to store training results for each epoch
 	for epoch in range(epochs):
-	
 		ovr_loss, batch_ = train_one_epoch(net, optimizer, trainloader, device, epoch, server_round, scaler)
 		if lr_scheduler is not None:
 			lr_scheduler.step()
@@ -141,7 +149,7 @@ def train(net, trainloader, valloader, epochs, lrate, momentum, weight_decay, se
 		print('Client {}, Epoch {}, Loss: {:.4f}, Perplexity: {:5.4f}'
 		      .format(client_no, epoch, avg_loss.item(), perplexity.item())) 
 
-	net.to("cpu")  # move model back to CPU
+	#net.to("cpu")  # move model back to CPU
 	
 	train_results = ' '.join(result for result in train_results)
 
@@ -153,6 +161,7 @@ def test(net, testloader, steps: int = None, device: str = 'cpu'):
 	net.to(device)  # move model to GPU if available
 
 	predictions = []
+	loss = None
 		
 	net.eval()
 	with torch.no_grad():
@@ -163,15 +172,16 @@ def test(net, testloader, steps: int = None, device: str = 'cpu'):
 			model_predictions = [{k: v.cpu().tolist() for k, v in prediction_dict.items()} for prediction_dict in model_predictions]
 			converted_results = coco_convert(image_ids, model_predictions)
 			predictions.extend(converted_results)
-			if steps is not None and batch_idx == steps:
-				break	
-	net.to("cpu")  # move model back to CPU
-	loss = None
+			if batch_idx == 3 and predictions == [] and device == "cpu": #which is 64*4 of val images on the server (CPU)
+				eval_error = 'The model cannot return prediction yet, requires more training'
+				return loss, eval_error	
+				
+	#net.to("cpu")  # move model back to CPU
 	
 	if predictions == []:
 		eval_error = 'The model cannot return prediction yet, requires more training'
-		return loss, eval_error
-		
+		return loss, eval_error	
+
 	random_name = str(uuid.uuid4())
 	# Define the path
 	json_file_path = os.path.join(result_path, f"{random_name}.json")
