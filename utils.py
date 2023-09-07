@@ -122,11 +122,11 @@ def train(net, trainloader, valloader, epochs, lrate, momentum, weight_decay, se
 	net.parameters(), lr=lrate, momentum=momentum, weight_decay=weight_decay)
 	scaler = torch.cuda.amp.GradScaler()
 	lr_scheduler = None
-	if server_round == 3:
-		print("MultiStepLR is activated for round 3.")
-		lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[3], gamma=0.1)
-	elif server_round == 4:
-		print("MultiStepLR is activated for round 4.")
+	if server_round == 5:
+		print("MultiStepLR is activated for the round.")
+		lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2], gamma=0.1)
+	elif server_round > 5:
+		print("MultiStepLR is activated for the round.")
 		lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[0], gamma=0.1)
 
 	train_results = []  # initialize a list to store training results for each epoch

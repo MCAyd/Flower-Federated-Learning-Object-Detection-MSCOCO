@@ -88,7 +88,7 @@ def client_dry_run(model, pretrained, noniid, device: str = "cpu"):
 	#validset = torch.utils.data.Subset(validset, range(100))
 	client = CocoClient(model, trainset, validset, device, str(0))
 	
-	config = {"batch_size": 16,
+	config = {"batch_size": 8,
 		"local_epochs": 6,
 		"learning_rate": 0.005,
 		"num_workers": 0,
